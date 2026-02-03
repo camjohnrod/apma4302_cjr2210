@@ -3,15 +3,15 @@
 #include <math.h>
 
 int main(int argc, char **argv) {
-  PetscMPIInt    rank, num_processes, terms_per_rank;
-  PetscInt       N = 3, i, num_remainder;
+  // What is the difference between PetscMPIInt and PetscInt?
+  PetscMPIInt    rank, num_processes, terms_per_rank, num_terms_used;
+  PetscInt       N = 3, i, num_remainder, is_negative = 0;
   PetscReal      x = 1.0, localval, globalsum, factorial_val, true_val, rel_error;
 
   PetscCall(PetscInitialize(&argc,&argv,NULL,
       "Compute exp(x) in parallel with PETSc.\n\n"));
   PetscCall(MPI_Comm_rank(PETSC_COMM_WORLD,&rank));
-
-  PetscCall(MPI_Comm_size(PETSC_COMM_WORLD, &num_processes));
+  PetscCall(MPI_Comm_size(PETSC_COMM_WORLD,&num_processes));
 
   // read option
   PetscOptionsBegin(PETSC_COMM_WORLD,"","options for expx","");
@@ -20,10 +20,18 @@ int main(int argc, char **argv) {
   PetscOptionsEnd();
 
   // compute e^x using N Taylor series terms (Horner's Method)
-  terms_per_rank = N / num_processes;
-  num_remainder = N - terms_per_rank * num_processes;
-  PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Taylor series terms per rank: %d\n", terms_per_rank));
-  PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Number of remaining terms: %d\n", num_remainder));
+  terms_per_rank = N / num_processes; // int division
+  num_terms_used = terms_per_rank * num_processes;
+  num_remainder = N - num_terms_used;
+  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Taylor series terms per rank: %d\n", terms_per_rank));
+  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Number of terms used: %d\n", num_terms_used));
+  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Number of remaining terms: %d\n", num_remainder));
+  
+  true_val = exp(x);
+  if (x < 0) {
+    x = PetscAbsReal(x);
+    is_negative = 1;
+  }
 
   localval = 0.0;
   for (i = terms_per_rank - 1; i >= 0; i--) {
@@ -36,18 +44,31 @@ int main(int argc, char **argv) {
     
   localval *= PetscPowReal(x, (terms_per_rank * rank));
 
+  // check the x coefficients for each group and remainder term
+  PetscCall(PetscPrintf(PETSC_COMM_SELF, "   Evenly distributed exponents: %d\n", terms_per_rank * rank));
+  
+  // add the remaining Taylor terms (distribute one remainder term per rank)
+  if (rank < num_remainder) {
+    PetscDTFactorial(num_terms_used + rank, &factorial_val);
+    localval += (1 / factorial_val) * PetscPowReal(x, (num_terms_used + rank));
+    PetscCall(PetscPrintf(PETSC_COMM_SELF, "   Remainder exponents: %d\n", num_terms_used + rank));
+  }
+
   // sum the contributions over all processes
   PetscCall(MPI_Allreduce(&localval,&globalsum,1,MPIU_REAL,MPIU_SUM,
       PETSC_COMM_WORLD));
 
+  if (is_negative) {
+    globalsum = 1 / globalsum;
+  }
+
   // output estimate and report on work from each process
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
-      "exp(%17.15f) is about %17.15f\n",x,globalsum));
+      "\nexp(%17.15f) is about %17.15f\n",x,globalsum));
 
-  true_val = exp(x);
   rel_error = PetscAbsReal(((true_val - globalsum) / true_val)) / PETSC_MACHINE_EPSILON;
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
-      "The relative error compared to the exp(x) function is %.5f * epsilon\n", rel_error));
+      "The relative error compared to the exp(x) function is %.6e * MACHINE_EPSILON\n", rel_error));
 
   PetscCall(PetscFinalize());
   return EXIT_SUCCESS;
