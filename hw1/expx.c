@@ -23,9 +23,6 @@ int main(int argc, char **argv) {
   terms_per_rank = N / num_processes; // int division
   num_terms_used = terms_per_rank * num_processes;
   num_remainder = N - num_terms_used;
-  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Taylor series terms per rank: %d\n", terms_per_rank));
-  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Number of terms used: %d\n", num_terms_used));
-  //PetscCall(PetscPrintf(PETSC_COMM_WORLD,"Number of remaining terms: %d\n", num_remainder));
   
   true_val = exp(x);
   if (x < 0) {
@@ -45,15 +42,13 @@ int main(int argc, char **argv) {
   localval *= PetscPowReal(x, (terms_per_rank * rank));
 
   // check the x coefficients for each group and remainder term
-  PetscCall(PetscPrintf(PETSC_COMM_SELF, "   Evenly distributed exponents: %d\n", terms_per_rank * rank));
   
   // add the remaining Taylor terms (distribute one remainder term per rank)
   if (rank < num_remainder) {
     PetscDTFactorial(num_terms_used + rank, &factorial_val);
     localval += (1 / factorial_val) * PetscPowReal(x, (num_terms_used + rank));
-    PetscCall(PetscPrintf(PETSC_COMM_SELF, "   Remainder exponents: %d\n", num_terms_used + rank));
   }
-
+  
   // sum the contributions over all processes
   PetscCall(MPI_Allreduce(&localval,&globalsum,1,MPIU_REAL,MPIU_SUM,
       PETSC_COMM_WORLD));
@@ -68,7 +63,7 @@ int main(int argc, char **argv) {
 
   rel_error = PetscAbsReal(((true_val - globalsum) / true_val)) / PETSC_MACHINE_EPSILON;
   PetscCall(PetscPrintf(PETSC_COMM_WORLD,
-      "The relative error compared to the exp(x) function is %.6e * MACHINE_EPSILON\n", rel_error));
+      "The relative error compared to the exp(x) function is %.6e * MACHINE_EPSILON\n\n", rel_error));
 
   PetscCall(PetscFinalize());
   return EXIT_SUCCESS;
