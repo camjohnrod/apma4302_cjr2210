@@ -3,6 +3,7 @@ static char help[] = "Solve a tridiagonal system of arbitrary size.\n"
 "Option prefix = bvp_.\n";
 
 #include <petsc.h>
+#include <petscviewerhdf5.h>
 
 int main(int argc,char **args) {
     Vec         x, b, xexact;
@@ -11,6 +12,7 @@ int main(int argc,char **args) {
     PetscInt    m = 201, i, Istart, Iend, j[3];
     PetscReal   v[3], xval, errnorm;
     PetscReal   gamma = 0.0, k = 5.0, c = 3.0;
+    PetscViewer  viewer;
 
     PetscCall(PetscInitialize(&argc,&args,NULL,help));
 
@@ -21,6 +23,7 @@ int main(int argc,char **args) {
     PetscCall(PetscOptionsReal("-c", "c parameter", "bvp.c", c, &c, NULL));
     PetscOptionsEnd();
     PetscReal h = 1.0 / (m - 1);
+    PetscInt boundary[2] = {0, m-1};
 
     PetscCall(VecCreate(PETSC_COMM_WORLD,&x));
     PetscCall(VecSetSizes(x,PETSC_DECIDE,m));
@@ -37,12 +40,12 @@ int main(int argc,char **args) {
     for (i=Istart; i<Iend; i++) {
         if (i == 0) {
             // v[0] = 3.0;  v[1] = -1.0;
-            v[0] = 2.0/(h*h) + 1.0;  v[1] = -1.0/(h*h);
+            v[0] = 2.0/(h*h) + gamma;  v[1] = -1.0/(h*h);
             j[0] = 0;    j[1] = 1;
             PetscCall(MatSetValues(A,1,&i,2,j,v,INSERT_VALUES));
         } else {
             // v[0] = -1.0;  v[1] = 3.0;  v[2] = -1.0;
-            v[0] = -1.0/(h*h);  v[1] = 2.0/(h*h) + 1.0;  v[2] = -1.0/(h*h);
+            v[0] = -1.0/(h*h);  v[1] = 2.0/(h*h) + gamma;  v[2] = -1.0/(h*h);
             j[0] = i-1;   j[1] = i;    j[2] = i+1;
             if (i == m-1) {
                 PetscCall(MatSetValues(A,1,&i,2,j,v,INSERT_VALUES));
@@ -60,11 +63,22 @@ int main(int argc,char **args) {
     PetscCall(VecAssemblyBegin(xexact));
     PetscCall(VecAssemblyEnd(xexact));
     PetscCall(MatMult(A,xexact,b));
+    PetscCall(MatZeroRowsColumns(A, 2, boundary, 1.0, xexact, b));
 
     PetscCall(KSPCreate(PETSC_COMM_WORLD,&ksp));
     PetscCall(KSPSetOperators(ksp,A,A));
     PetscCall(KSPSetFromOptions(ksp));
     PetscCall(KSPSolve(ksp,b,x));
+
+    PetscCall(PetscViewerHDF5Open(PETSC_COMM_WORLD, "bvp_solution.h5",
+    FILE_MODE_WRITE, &viewer));
+    PetscCall(PetscObjectSetName((PetscObject) xexact, "uexact"));
+    PetscCall(PetscObjectSetName((PetscObject) b, "f"));
+    PetscCall(PetscObjectSetName((PetscObject) x, "u"));
+    PetscCall(VecView(b, viewer));
+    PetscCall(VecView(x, viewer));
+    PetscCall(VecView(xexact, viewer));
+    PetscCall(PetscViewerDestroy(&viewer));
 
     PetscCall(VecAXPY(x,-1.0,xexact));
     PetscCall(VecNorm(x,NORM_2,&errnorm));

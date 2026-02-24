@@ -69,3 +69,8 @@ if __name__ == "__main__":
     x = np.linspace(0, 1, len(u))  
     
     plot_bvp_solution(x, u, u_exact)
+
+    error = np.abs(u - u_exact)
+    k_vec = np.array([1,5,10])
+    m_vec = np.array([40,80,160,320,640,1280])
+    
