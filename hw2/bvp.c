@@ -1,6 +1,6 @@
 //STARTWHOLE
 static char help[] = "Solve a tridiagonal system of arbitrary size.\n"
-"Option prefix = tri_.\n";
+"Option prefix = bvp_.\n";
 
 #include <petsc.h>
 
@@ -8,13 +8,17 @@ int main(int argc,char **args) {
     Vec         x, b, xexact;
     Mat         A;
     KSP         ksp;
-    PetscInt    m = 4, i, Istart, Iend, j[3];
+    PetscInt    m = 201, i, Istart, Iend, j[3];
     PetscReal   v[3], xval, errnorm;
+    PetscReal   gamma = 0.0, k = 5.0, c = 3.0;
 
     PetscCall(PetscInitialize(&argc,&args,NULL,help));
 
-    PetscOptionsBegin(PETSC_COMM_WORLD,"tri_","options for tri",NULL);
-    PetscCall(PetscOptionsInt("-m","dimension of linear system","tri.c",m,&m,NULL));
+    PetscOptionsBegin(PETSC_COMM_WORLD, "bvp_", "options for bvp", NULL);
+    PetscCall(PetscOptionsInt("-m", "number of nodes", "bvp.c", m, &m, NULL));
+    PetscCall(PetscOptionsReal("-gamma", "gamma parameter", "bvp.c", gamma, &gamma, NULL));
+    PetscCall(PetscOptionsReal("-k", "k parameter", "bvp.c", k, &k, NULL));
+    PetscCall(PetscOptionsReal("-c", "c parameter", "bvp.c", c, &c, NULL));
     PetscOptionsEnd();
     PetscReal h = 1.0 / (m - 1);
 
@@ -47,7 +51,8 @@ int main(int argc,char **args) {
             }
         }
         // xval = PetscExpReal(PetscCosReal((double)i));
-        xval = PetscExpReal(PetscCosReal((PetscReal)i * h));
+        // xval = PetscExpReal(PetscCosReal((PetscReal)i * h));
+        xval = PetscSinReal(k * PETSC_PI * (PetscReal)i * h) + c * PetscPowScalar((PetscReal)i * h - 0.5, 3);
         PetscCall(VecSetValues(xexact,1,&i,&xval,INSERT_VALUES));
     }
     PetscCall(MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY));
