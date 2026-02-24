@@ -16,6 +16,7 @@ int main(int argc,char **args) {
     PetscOptionsBegin(PETSC_COMM_WORLD,"tri_","options for tri",NULL);
     PetscCall(PetscOptionsInt("-m","dimension of linear system","tri.c",m,&m,NULL));
     PetscOptionsEnd();
+    PetscReal h = 1.0 / (m - 1);
 
     PetscCall(VecCreate(PETSC_COMM_WORLD,&x));
     PetscCall(VecSetSizes(x,PETSC_DECIDE,m));
@@ -31,11 +32,13 @@ int main(int argc,char **args) {
     PetscCall(MatGetOwnershipRange(A,&Istart,&Iend));
     for (i=Istart; i<Iend; i++) {
         if (i == 0) {
-            v[0] = 3.0;  v[1] = -1.0;
+            // v[0] = 3.0;  v[1] = -1.0;
+            v[0] = 2.0/(h*h) + 1.0;  v[1] = -1.0/(h*h);
             j[0] = 0;    j[1] = 1;
             PetscCall(MatSetValues(A,1,&i,2,j,v,INSERT_VALUES));
         } else {
-            v[0] = -1.0;  v[1] = 3.0;  v[2] = -1.0;
+            // v[0] = -1.0;  v[1] = 3.0;  v[2] = -1.0;
+            v[0] = -1.0/(h*h);  v[1] = 2.0/(h*h) + 1.0;  v[2] = -1.0/(h*h);
             j[0] = i-1;   j[1] = i;    j[2] = i+1;
             if (i == m-1) {
                 PetscCall(MatSetValues(A,1,&i,2,j,v,INSERT_VALUES));
@@ -43,7 +46,8 @@ int main(int argc,char **args) {
                 PetscCall(MatSetValues(A,1,&i,3,j,v,INSERT_VALUES));
             }
         }
-        xval = PetscExpReal(PetscCosReal((double)i));
+        // xval = PetscExpReal(PetscCosReal((double)i));
+        xval = PetscExpReal(PetscCosReal((PetscReal)i * h));
         PetscCall(VecSetValues(xexact,1,&i,&xval,INSERT_VALUES));
     }
     PetscCall(MatAssemblyBegin(A,MAT_FINAL_ASSEMBLY));
